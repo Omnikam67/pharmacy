@@ -1,12 +1,27 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Segoe UI", "Inter", "Plus Jakarta Sans", sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  --app-bg: #f4fbff;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-strong: #ffffff;
+  --line: #d7e7f2;
+  --text: #0f172a;
+  --muted: #5f7289;
+  --brand: #2563eb;
+  --brand-strong: #0f4ec9;
+  --accent: #0ea5e9;
+  --success: #059669;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --shadow-soft: 0 18px 60px -34px rgba(15, 23, 42, 0.28);
 
   color-scheme: light;
   color: #0f172a;
-  /* light base background so app content shows normally */
-  background-color: #f8fafc;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28%),
+    radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.1), transparent 24%),
+    linear-gradient(180deg, #f8fdff 0%, #eef8ff 52%, #f8fbff 100%);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -25,40 +40,123 @@ a:hover {
 
 body {
   margin: 0;
-  /* do not center globally; lets our app control layout */
   min-width: 320px;
   min-height: 100vh;
   color: inherit;
+  background: var(--app-bg);
 }
 
-/* ensure React root occupies full viewport so child elements using h-screen work */
 #root {
   width: 100%;
   height: 100%;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
 button {
-  border-radius: 8px;
+  border-radius: 14px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
-  font-weight: 500;
+  font-weight: 600;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: #f8fafc;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: rgba(37, 99, 235, 0.28);
+  transform: translateY(-1px);
 }
 button:focus,
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.18);
+}
+
+.app-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28%),
+    radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.1), transparent 24%),
+    linear-gradient(180deg, #f8fdff 0%, #eef8ff 52%, #f8fbff 100%);
+}
+
+.app-container {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.app-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(14px);
+}
+
+.app-hero {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.84)),
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.16), transparent 30%);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+}
+
+.app-metric {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 40px -30px rgba(15, 23, 42, 0.25);
+}
+
+.app-section-title {
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  line-height: 1.1;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--text);
+}
+
+.app-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #6b85a0;
+}
+
+.app-muted {
+  color: var(--muted);
+}
+
+.app-btn-primary {
+  background: linear-gradient(135deg, var(--brand), var(--accent));
+  color: white;
+  box-shadow: 0 16px 34px -18px rgba(37, 99, 235, 0.45);
+}
+
+.app-btn-primary:hover {
+  background: linear-gradient(135deg, var(--brand-strong), #0891b2);
+}
+
+.app-btn-secondary {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.app-card-compact {
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 50px -38px rgba(15, 23, 42, 0.26);
 }
 
 @media (prefers-color-scheme: light) {
@@ -68,8 +166,5 @@ button:focus-visible {
   }
   a:hover {
     color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
   }
 }

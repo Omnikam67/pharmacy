@@ -34,20 +34,22 @@ export function RevenueAnalytics({ doctorId, onBack }) {
   const StatCard = ({ label, value, icon, color }) => {
     const IconComponent = icon;
     const colorClasses = {
-      green: 'bg-green-50 border-green-200 text-green-900',
-      blue: 'bg-blue-50 border-blue-200 text-blue-900',
-      purple: 'bg-purple-50 border-purple-200 text-purple-900',
-      orange: 'bg-orange-50 border-orange-200 text-orange-900'
+      green: 'border-green-100 text-green-900',
+      blue: 'border-blue-100 text-blue-900',
+      purple: 'border-cyan-100 text-cyan-900',
+      orange: 'border-amber-100 text-amber-900'
     };
 
     return (
-      <div className={`border rounded-xl p-6 ${colorClasses[color]}`}>
+      <div className={`app-metric rounded-[24px] p-5 ${colorClasses[color]}`}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium opacity-75">{label}</p>
-            <p className="text-3xl font-bold mt-2">{value}</p>
+            <p className="app-eyebrow opacity-80">{label}</p>
+            <p className="mt-3 text-3xl font-black tracking-tight">{value}</p>
           </div>
-          <IconComponent size={32} className="opacity-30" />
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <IconComponent size={26} className="opacity-70" />
+          </div>
         </div>
       </div>
     );
@@ -58,22 +60,25 @@ export function RevenueAnalytics({ doctorId, onBack }) {
     : [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-sky-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
+    <div className="app-shell px-4 py-5 md:px-6">
+      <div className="app-container">
+        <div className="app-hero mb-6 rounded-[30px] px-6 py-6 md:px-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
             {onBack && (
               <button
                 onClick={onBack}
-                className="text-blue-600 hover:text-blue-700 font-semibold mb-3"
+                className="mb-3 inline-flex items-center rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
               >
                 Back to Dashboard
               </button>
             )}
-            <h1 className="text-3xl font-black text-blue-900 mb-2">Revenue Analysis</h1>
-          </div>
+              <p className="app-eyebrow">Business Overview</p>
+              <h1 className="app-section-title mt-3">Revenue Analysis</h1>
+              <p className="app-muted mt-2 max-w-2xl text-sm md:text-base">Monitor appointment conversion, cancellations, and earnings with a cleaner analytics view.</p>
+            </div>
 
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-wrap gap-2">
             {[
               { value: 'today', label: 'Today' },
               { value: 'previous_day', label: 'Previous Day' },
@@ -85,10 +90,10 @@ export function RevenueAnalytics({ doctorId, onBack }) {
               <button
                 key={period.value}
                 onClick={() => setSelectedPeriod(period.value)}
-                className={`px-4 py-2 rounded-lg font-semibold transition ${
+                className={`rounded-2xl px-4 py-2.5 text-sm font-semibold transition ${
                   selectedPeriod === period.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                    ? 'app-btn-primary text-white'
+                    : 'app-btn-secondary text-slate-700'
                 }`}
               >
                 {period.label}
@@ -96,18 +101,19 @@ export function RevenueAnalytics({ doctorId, onBack }) {
             ))}
           </div>
         </div>
+        </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-100 border border-red-200 text-red-700 rounded-lg">
+          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
             {error}
           </div>
         )}
 
         {loading ? (
-          <div className="text-center py-12 text-slate-500">Loading analytics...</div>
+          <div className="app-panel rounded-[28px] py-16 text-center text-slate-500">Loading analytics...</div>
         ) : analytics ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <StatCard
                 label="Total Revenue"
                 value={`Rs ${Number(analytics.total_revenue || 0).toFixed(2)}`}
@@ -134,11 +140,11 @@ export function RevenueAnalytics({ doctorId, onBack }) {
               />
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6">
-              <h2 className="text-xl font-bold text-slate-800 mb-4">Performance Summary</h2>
+            <div className="app-panel rounded-[28px] p-6">
+              <h2 className="text-xl font-black tracking-tight text-slate-900">Performance Summary</h2>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+              <div className="mt-5 space-y-4">
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
                   <span className="text-slate-700 font-medium">Average Revenue per Approved Appointment</span>
                   <span className="text-2xl font-bold text-green-600">
                     Rs {analytics.approved_appointments > 0
@@ -147,7 +153,7 @@ export function RevenueAnalytics({ doctorId, onBack }) {
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
                   <span className="text-slate-700 font-medium">Approval Rate</span>
                   <span className="text-2xl font-bold text-blue-600">
                     {analytics.total_appointments > 0
@@ -156,21 +162,21 @@ export function RevenueAnalytics({ doctorId, onBack }) {
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
                   <span className="text-slate-700 font-medium">Pending Approvals</span>
                   <span className="text-2xl font-bold text-yellow-600">{analytics.pending_appointments || 0}</span>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6">
-              <h2 className="text-xl font-bold text-slate-800 mb-4">Revenue by Day</h2>
+            <div className="app-panel rounded-[28px] p-6">
+              <h2 className="text-xl font-black tracking-tight text-slate-900">Revenue by Day</h2>
               {breakdownRows.length === 0 ? (
-                <p className="text-slate-500">No revenue records found for this filter.</p>
+                <p className="mt-4 text-slate-500">No revenue records found for this filter.</p>
               ) : (
-                <div className="space-y-3">
+                <div className="mt-5 space-y-3">
                   {breakdownRows.map(([day, amount]) => (
-                    <div key={day} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div key={day} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-3">
                       <span className="font-medium text-slate-700">{day}</span>
                       <span className="font-bold text-emerald-700">Rs {Number(amount).toFixed(2)}</span>
                     </div>

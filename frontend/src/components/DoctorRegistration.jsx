@@ -141,40 +141,46 @@ export function DoctorRegistration({ onBack, onSuccess }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-sky-100 p-6">
-      <div className="max-w-2xl mx-auto">
-        <button onClick={onBack} className="text-blue-600 hover:text-blue-700 font-semibold mb-6">
-          Back
-        </button>
+    <div className="app-shell px-4 py-5 md:px-6">
+      <div className="mx-auto max-w-3xl">
+        <div className="app-hero rounded-[30px] px-6 py-6 md:px-8">
+          <button onClick={onBack} className="mb-4 inline-flex items-center rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+            Back
+          </button>
+          <p className="app-eyebrow">Provider Onboarding</p>
+          <h1 className="app-section-title mt-3">Doctor Registration</h1>
+          <p className="app-muted mt-2 max-w-2xl text-sm md:text-base">
+            Register your professional profile, upload credentials, and submit your account for approval.
+          </p>
+        </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-blue-100 p-8">
-          <h1 className="text-3xl font-black text-blue-900 mb-2">Doctor Registration</h1>
-          <p className="text-slate-600 mb-8">Register with doctor ID and password. Approval is required before login.</p>
+        <div className="app-panel mt-6 rounded-[30px] p-6 md:p-8">
+          {error && <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
+          {success && <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700">{success}</div>}
 
-          {error && <div className="mb-4 p-4 bg-red-100 border border-red-200 text-red-700 rounded-lg">{error}</div>}
-          {success && <div className="mb-4 p-4 bg-green-100 border border-green-200 text-green-700 rounded-lg">{success}</div>}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid gap-5 md:grid-cols-2">
             {fields.map(([name, label, type]) => (
               <div key={name}>
-                <label className="block text-sm font-medium text-slate-700 mb-2">{label} *</label>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">{label} *</label>
                 <input
                   type={type}
                   name={name}
                   value={formData[name]}
                   onChange={handleInputChange}
-                  className="w-full border border-slate-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             ))}
+            </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Gender *</label>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Gender *</label>
               <select
                 name="gender"
                 value={formData.gender}
                 onChange={handleInputChange}
-                className="w-full border border-slate-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select gender</option>
                 <option value="Male">Male</option>
@@ -184,59 +190,63 @@ export function DoctorRegistration({ onBack, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Address *</label>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Address *</label>
               <textarea
                 name="address"
                 value={formData.address}
                 onChange={handleInputChange}
                 rows="3"
-                className="w-full border border-slate-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Doctor Image *</label>
-              <input type="file" name="profile_image" accept="image/*" onChange={handleFileChange} className="w-full border border-slate-200 rounded-lg px-4 py-3" />
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Doctor Image *</label>
+                <input type="file" name="profile_image" accept="image/*" onChange={handleFileChange} className="w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3" />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Degree Certificate Image *</label>
+                <input type="file" name="degree_certificate_image" accept="image/*" onChange={handleFileChange} className="w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3" />
+              </div>
             </div>
 
+            <div className="grid gap-5 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Degree Certificate Image *</label>
-              <input type="file" name="degree_certificate_image" accept="image/*" onChange={handleFileChange} className="w-full border border-slate-200 rounded-lg px-4 py-3" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Password *</label>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Password *</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className="w-full border border-slate-200 rounded-lg px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 shadow-none">
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Confirm Password *</label>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Confirm Password *</label>
               <div className="relative">
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className="w-full border border-slate-200 rounded-lg px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 shadow-none">
                   {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
+            </div>
 
-            <button type="submit" disabled={loading} className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-gray-400 mt-6">
+            <button type="submit" disabled={loading} className="app-btn-primary mt-2 w-full rounded-2xl px-6 py-3.5 text-sm font-semibold text-white disabled:opacity-60">
               {loading ? 'Registering...' : 'Register as Doctor'}
             </button>
           </form>

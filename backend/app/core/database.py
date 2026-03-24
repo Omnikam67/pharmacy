@@ -94,6 +94,7 @@ def init_db():
             ensure_column("appointment_requests", "prescription_notes", "prescription_notes LONGTEXT NULL")
             ensure_column("appointment_requests", "prescription_image", "prescription_image LONGTEXT NULL")
             ensure_column("appointment_requests", "completed_at", "completed_at DATETIME NULL")
+            ensure_column("appointment_requests", "referral_id", "referral_id VARCHAR(36) NULL")
 
             conn.execute(text("UPDATE doctors SET doctor_id = id WHERE doctor_id IS NULL OR doctor_id = ''"))
             conn.execute(text("UPDATE users SET pharma_id = shop_id WHERE (pharma_id IS NULL OR pharma_id = '') AND shop_id IS NOT NULL"))

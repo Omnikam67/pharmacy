@@ -43,67 +43,69 @@ export function DoctorDashboard({ doctorId, doctorName, onLogout, onOpenRevenue 
   const StatBox = ({ label, value, icon, color = 'blue' }) => {
     const IconComponent = icon;
     const colorClasses = {
-      blue: 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 text-blue-900',
-      green: 'bg-gradient-to-br from-green-50 to-green-100 border-green-200 text-green-900',
-      emerald: 'bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200 text-emerald-900',
-      orange: 'bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 text-orange-900',
-      red: 'bg-gradient-to-br from-red-50 to-red-100 border-red-200 text-red-900',
+      blue: 'border-blue-100 text-blue-900',
+      green: 'border-green-100 text-green-900',
+      emerald: 'border-emerald-100 text-emerald-900',
+      orange: 'border-amber-100 text-amber-900',
+      red: 'border-rose-100 text-rose-900',
     };
 
     return (
-      <div className={`rounded-xl border p-6 ${colorClasses[color]}`}>
+      <div className={`app-metric rounded-[24px] p-5 ${colorClasses[color]}`}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium opacity-75">{label}</p>
-            <p className="text-3xl font-bold mt-2">{value}</p>
+            <p className="app-eyebrow opacity-80">{label}</p>
+            <p className="mt-3 text-3xl font-black tracking-tight">{value}</p>
           </div>
-          <IconComponent size={32} className="opacity-30" />
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <IconComponent size={26} className="opacity-70" />
+          </div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-sky-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
-        <header className="bg-white rounded-2xl shadow-lg border border-blue-100 px-6 py-5 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-black text-blue-900">Doctor Dashboard</h1>
-            <p className="text-slate-600 text-base mt-1">Welcome, Dr. {doctorName}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {onOpenRevenue && (
+    <div className="app-shell px-4 py-5 md:px-6">
+      <div className="app-container space-y-6">
+        <header className="app-hero rounded-[30px] px-6 py-6 md:px-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="app-eyebrow">Clinical Workspace</p>
+              <h1 className="app-section-title mt-3">Doctor Dashboard</h1>
+              <p className="app-muted mt-2 text-sm md:text-base">Welcome, Dr. {doctorName}. Review appointments, referrals, and revenue performance from one place.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={onOpenRevenue}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
+                onClick={() => loadStats()}
+                className="app-btn-secondary inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold"
               >
-                Revenue Analysis
+                <RefreshCw size={16} /> Refresh
               </button>
-            )}
-            <button
-              onClick={onLogout}
-              className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition"
-            >
-              Logout
-            </button>
+              {onOpenRevenue && (
+                <button
+                  onClick={onOpenRevenue}
+                  className="app-btn-primary rounded-2xl px-5 py-3 text-sm font-semibold"
+                >
+                  Revenue Analysis
+                </button>
+              )}
+              <button
+                onClick={onLogout}
+                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
 
-        <div className="bg-white rounded-2xl shadow-lg border border-blue-100 p-4 flex justify-end">
-          <button
-            onClick={() => loadStats()}
-            className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition inline-flex items-center gap-2"
-          >
-            <RefreshCw size={16} /> Refresh
-          </button>
-        </div>
-
         {loading ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500">Loading dashboard...</p>
+          <div className="app-panel rounded-[28px] py-16 text-center">
+            <p className="app-muted">Loading dashboard...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
             <StatBox label="Pending" value={stats.pending_requests} icon={Clock} color="orange" />
             <StatBox label="Approved" value={stats.approved_requests} icon={CheckCircle} color="green" />
             <StatBox label="Completed" value={stats.completed_requests} icon={Calendar} color="emerald" />
@@ -117,8 +119,13 @@ export function DoctorDashboard({ doctorId, doctorName, onLogout, onOpenRevenue 
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-lg border border-blue-100 p-6">
-          <h2 className="text-2xl font-bold text-blue-900 mb-4">Appointment Requests</h2>
+        <div className="app-panel rounded-[30px] p-5 md:p-6">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="app-eyebrow">Patient Flow</p>
+              <h2 className="app-section-title mt-3 text-[1.8rem]">Appointment Requests</h2>
+            </div>
+          </div>
           <AppointmentRequests doctorId={doctorId} embedded onStatusChange={() => loadStats(true)} />
         </div>
       </div>

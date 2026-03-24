@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Calendar, CheckCircle, ClipboardPlus, Phone, User, XCircle } from 'lucide-react';
+import { ArrowRight, Calendar, CheckCircle, ClipboardPlus, Phone, User, XCircle } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE =
@@ -9,7 +9,6 @@ const API_BASE =
 
 const EMPTY_MEDICINE = {
   medicine_name: '',
-  dosage: '',
   frequency: '',
   duration: '',
   notes: '',
@@ -18,10 +17,20 @@ const EMPTY_MEDICINE = {
 export function AppointmentRequests({ doctorId, embedded = false, onStatusChange }) {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSourceReferrals, setLoadingSourceReferrals] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [processingId, setProcessingId] = useState(null);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [sourceReferrals, setSourceReferrals] = useState([]);
   const [cancelModal, setCancelModal] = useState({ open: false, appointmentId: null, reason: '' });
+  const [referralModal, setReferralModal] = useState({
+    open: false,
+    appointment: null,
+    to_doctor_id: '',
+    reason: '',
+    clinical_notes: '',
+  });
   const [completionModal, setCompletionModal] = useState({
     open: false,
     appointment: null,
@@ -36,6 +45,17 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
     approved: 'Approved',
     completed: 'Completed',
     cancelled: 'Cancelled',
+  };
+
+  const getDisplayStatus = (appointment) => {
+    if (
+      appointment?.referral &&
+      appointment.referral.from_doctor_id === doctorId &&
+      appointment.referral.status === 'completed'
+    ) {
+      return 'completed';
+    }
+    return appointment.status;
   };
 
   const loadAppointments = useCallback(async () => {
@@ -76,6 +96,22 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
     loadAppointments();
   }, [loadAppointments]);
 
+  const loadSourceReferrals = useCallback(async () => {
+    setLoadingSourceReferrals(true);
+    try {
+      const res = await axios.get(`${API_BASE}/doctor/referrals/source/${doctorId}`);
+      setSourceReferrals(res.data.referrals || []);
+    } catch (err) {
+      console.error('Failed to load referrals:', err);
+    } finally {
+      setLoadingSourceReferrals(false);
+    }
+  }, [doctorId]);
+
+  useEffect(() => {
+    loadSourceReferrals();
+  }, [loadSourceReferrals]);
+
   const handleApprove = async (appointmentId, enteredAmount) => {
     const revenueAmount = parseFloat(enteredAmount);
     if (Number.isNaN(revenueAmount) || revenueAmount < 0) {
@@ -98,6 +134,8 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
       }
 
       await loadAppointments();
+      await loadSourceReferrals();
+      setSuccess('Appointment approved successfully.');
       onStatusChange?.();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to approve appointment');
@@ -122,6 +160,8 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
       }
 
       await loadAppointments();
+      await loadSourceReferrals();
+      setSuccess('Appointment cancelled successfully.');
       onStatusChange?.();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to cancel appointment');
@@ -146,6 +186,18 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
     });
     setMedicineSuggestions({});
     setError('');
+  };
+
+  const openReferralModal = (appointment) => {
+    setReferralModal({
+      open: true,
+      appointment,
+      to_doctor_id: '',
+      reason: '',
+      clinical_notes: appointment.notes || '',
+    });
+    setError('');
+    setSuccess('');
   };
 
   const updateMedicineField = async (index, field, value) => {
@@ -224,6 +276,8 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
       });
       setMedicineSuggestions({});
       await loadAppointments();
+      await loadSourceReferrals();
+      setSuccess('Appointment completed and prescription shared successfully.');
       onStatusChange?.();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to complete appointment');
@@ -232,22 +286,78 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
     }
   };
 
+  const submitReferral = async () => {
+    if (!referralModal.appointment?.id) {
+      return;
+    }
+    if (!referralModal.to_doctor_id.trim()) {
+      setError('Enter the referred doctor id');
+      return;
+    }
+    if (!referralModal.reason.trim()) {
+      setError('Referral reason is required');
+      return;
+    }
+
+    setProcessingId(referralModal.appointment.id);
+    try {
+      const res = await axios.post(`${API_BASE}/doctor/referrals/create`, {
+        source_appointment_id: referralModal.appointment.id,
+        from_doctor_id: doctorId,
+        to_doctor_id: referralModal.to_doctor_id.trim(),
+        reason: referralModal.reason.trim(),
+        clinical_notes: referralModal.clinical_notes.trim() || null,
+      });
+      if (!res.data.success) {
+        setError(res.data.message || 'Failed to create referral');
+        return;
+      }
+
+      setReferralModal({
+        open: false,
+        appointment: null,
+        to_doctor_id: '',
+        reason: '',
+        clinical_notes: '',
+      });
+      await loadAppointments();
+      await loadSourceReferrals();
+      setSuccess('Referral created successfully.');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to create referral');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const AppointmentCard = ({ appointment }) => (
     <div className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md transition">
+      {(() => {
+        const displayStatus = getDisplayStatus(appointment);
+
+        return (
+          <>
       <div className="flex items-center justify-between mb-4">
-        <span
-          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-            appointment.status === 'completed'
-              ? 'bg-emerald-100 text-emerald-700'
-              : appointment.status === 'approved'
-              ? 'bg-green-100 text-green-700'
-              : appointment.status === 'cancelled'
-              ? 'bg-red-100 text-red-700'
-              : 'bg-yellow-100 text-yellow-700'
-          }`}
-        >
-          {statusLabel[appointment.status] || 'Pending'}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+              displayStatus === 'completed'
+                ? 'bg-emerald-100 text-emerald-700'
+                : displayStatus === 'approved'
+                ? 'bg-green-100 text-green-700'
+                : displayStatus === 'cancelled'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-yellow-100 text-yellow-700'
+            }`}
+          >
+            {statusLabel[displayStatus] || 'Pending'}
+          </span>
+          {appointment.referral && (
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+              Referred by Dr. {appointment.referral.from_doctor_name || 'Doctor'}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -284,32 +394,17 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
         </div>
       </div>
 
-      {appointment.notes && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-slate-600 italic">{appointment.notes}</p>
+      {appointment.referral && (
+        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+          <p className="font-semibold">
+            Referral: Dr. {appointment.referral.from_doctor_name || 'Doctor'} <ArrowRight size={14} className="inline mx-1" />
+            Dr. {appointment.referral.to_doctor_name || 'Doctor'}
+          </p>
+          <p className="mt-1">Reason: {appointment.referral.reason}</p>
         </div>
       )}
 
-      {appointment.status === 'completed' && appointment.prescription_medicines?.length > 0 && (
-        <div className="mb-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3">
-          <p className="text-sm font-semibold text-emerald-800">Prescription</p>
-          <div className="mt-2 space-y-1 text-sm text-emerald-900">
-            {appointment.prescription_medicines.map((medicine, index) => (
-              <div key={`${appointment.id}-${index}`} className="rounded-md bg-white/60 p-2">
-                <p>{index + 1}. Medicine name: {medicine.medicine_name}</p>
-                {medicine.frequency && <p>Frequency: {medicine.frequency}</p>}
-                {medicine.duration && <p>Duration: {medicine.duration}</p>}
-                {medicine.notes && <p>Extra note: {medicine.notes}</p>}
-              </div>
-            ))}
-          </div>
-          {appointment.prescription_notes && (
-            <p className="mt-2 text-sm text-emerald-800">Prescription notes: {appointment.prescription_notes}</p>
-          )}
-        </div>
-      )}
-
-      {appointment.status === 'pending' ? (
+      {displayStatus === 'pending' ? (
         <div className="flex gap-2">
           <button
             onClick={() => handleApprove(appointment.id, appointment.appointment_fee || '500')}
@@ -326,11 +421,19 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
             <XCircle size={18} /> Cancel
           </button>
         </div>
-      ) : appointment.status === 'approved' ? (
+      ) : displayStatus === 'approved' ? (
         <div className="flex gap-2">
           <div className="flex-1 rounded-lg bg-green-100 text-green-700 text-sm font-semibold text-center py-2">
             Confirmed with patient
           </div>
+          {!appointment.referral_id && (
+            <button
+              onClick={() => openReferralModal(appointment)}
+              className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition"
+            >
+              Refer
+            </button>
+          )}
           <button
             onClick={() => openCompletionModal(appointment)}
             className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
@@ -341,29 +444,37 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
       ) : (
         <div
           className={`p-2 rounded-lg text-sm font-semibold text-center ${
-            appointment.status === 'completed'
+            displayStatus === 'completed'
               ? 'bg-emerald-100 text-emerald-700'
               : 'bg-red-100 text-red-700'
           }`}
         >
-          {appointment.status === 'completed' ? 'Appointment completed' : 'Appointment cancelled'}
+          {displayStatus === 'completed' ? 'Appointment completed' : 'Appointment cancelled'}
         </div>
       )}
+          </>
+        );
+      })()}
     </div>
   );
 
   return (
-    <div className={embedded ? '' : 'min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-sky-100 p-6'}>
-      <div className={embedded ? '' : 'max-w-4xl mx-auto'}>
-        {!embedded && <h1 className="text-3xl font-black text-blue-900 mb-6">Appointment Requests</h1>}
+    <div className={embedded ? '' : 'app-shell px-4 py-5 md:px-6'}>
+      <div className={embedded ? '' : 'app-container'}>
+        {!embedded && (
+          <div className="app-hero mb-6 rounded-[30px] px-6 py-6">
+            <p className="app-eyebrow">Clinical Queue</p>
+            <h1 className="app-section-title mt-3">Appointment Requests</h1>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 mb-6">
           {['all', 'pending', 'approved', 'completed', 'cancelled'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2.5 rounded-lg font-semibold transition ${
-                activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              className={`rounded-2xl px-5 py-2.5 text-sm font-semibold transition ${
+                activeTab === tab ? 'app-btn-primary text-white' : 'app-btn-secondary text-slate-700'
               }`}
             >
               {statusLabel[tab]}
@@ -371,17 +482,137 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
           ))}
         </div>
 
-        {error && <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 rounded-lg">{error}</div>}
+        {error && <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
+        {success && <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700">{success}</div>}
 
         {loading ? (
-          <div className="text-center py-12 text-slate-500">Loading...</div>
+          <div className="app-panel rounded-[28px] py-12 text-center text-slate-500">Loading...</div>
         ) : appointments.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">No {statusLabel[activeTab].toLowerCase()} appointments</div>
+          <div className="app-panel rounded-[28px] py-12 text-center text-slate-500">No {statusLabel[activeTab].toLowerCase()} appointments</div>
         ) : (
           <div className="grid gap-4">
             {appointments.map((apt) => (
               <AppointmentCard key={apt.id} appointment={apt} />
             ))}
+          </div>
+        )}
+
+        <div className="app-panel mt-8 rounded-[28px] p-5">
+          <p className="app-eyebrow">Referral Oversight</p>
+          <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">Your Referrals</h3>
+          <p className="mt-2 text-sm text-slate-600">
+            Track patients you referred to specialists and review the final prescription in read-only mode.
+          </p>
+
+          <div className="mt-4 space-y-4">
+            {loadingSourceReferrals ? (
+              <p className="text-slate-500">Loading referrals...</p>
+            ) : sourceReferrals.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
+                No referrals created yet.
+              </div>
+            ) : (
+              sourceReferrals.map((referral) => (
+                <div key={referral.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-2">
+                      <p className="font-bold text-slate-900">
+                        {referral.patient_name} | Dr. {referral.from_doctor_name || 'Doctor'} <ArrowRight size={14} className="inline mx-1" />
+                        Dr. {referral.to_doctor_name || 'Doctor'}
+                      </p>
+                      <p className="text-sm text-slate-600">Reason: {referral.reason}</p>
+                      {referral.clinical_notes && <p className="text-sm text-slate-700">Clinical notes: {referral.clinical_notes}</p>}
+                      {referral.status === 'completed' && (
+                        <p className="text-sm font-semibold text-emerald-700">
+                          Referred case completed by Dr. {referral.to_doctor_name || 'Doctor'}
+                        </p>
+                      )}
+                      {referral.result_appointment?.prescription_medicines?.length > 0 && (
+                        <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
+                          <p className="font-semibold text-emerald-800">Final Prescription</p>
+                          {referral.result_appointment.prescription_medicines.map((medicine, index) => (
+                            <p key={`${referral.id}-result-${index}`}>{index + 1}. {medicine.medicine_name}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <span className="rounded-lg bg-blue-100 px-3 py-2 text-sm font-semibold text-blue-700 capitalize">
+                        {String(referral.status || '').replace('_', ' ')}
+                      </span>
+                      {referral.result_appointment?.status === 'completed' && referral.result_appointment?.has_prescription_image && (
+                        <a
+                          href={`${API_BASE}/doctor/appointments/${referral.result_appointment.id}/prescription-download`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
+                        >
+                          Download Prescription
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {referralModal.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+            <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+              <h2 className="text-xl font-bold text-slate-900">Create Referral</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Refer this patient to another approved doctor. The patient will later book the referred consultation.
+              </p>
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Referred doctor id</label>
+                  <input
+                    type="text"
+                    value={referralModal.to_doctor_id}
+                    onChange={(e) => setReferralModal((prev) => ({ ...prev, to_doctor_id: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                    placeholder="Enter approved doctor id"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Reason</label>
+                  <textarea
+                    rows="3"
+                    value={referralModal.reason}
+                    onChange={(e) => setReferralModal((prev) => ({ ...prev, reason: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                    placeholder="Why are you referring this patient?"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Clinical notes</label>
+                  <textarea
+                    rows="4"
+                    value={referralModal.clinical_notes}
+                    onChange={(e) => setReferralModal((prev) => ({ ...prev, clinical_notes: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                    placeholder="Short summary for the referred doctor"
+                  />
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  onClick={() => setReferralModal({ open: false, appointment: null, to_doctor_id: '', reason: '', clinical_notes: '' })}
+                  className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={submitReferral}
+                  disabled={processingId === referralModal.appointment?.id}
+                  className="rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                >
+                  Send Referral
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -453,16 +684,6 @@ export function AppointmentRequests({ doctorId, embedded = false, onStatusChange
                         )}
                       </div>
 
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">Dosage</label>
-                        <input
-                          type="text"
-                          value={medicine.dosage}
-                          onChange={(e) => updateMedicineField(index, 'dosage', e.target.value)}
-                          placeholder="1 tablet"
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-                        />
-                      </div>
                       <div>
                         <label className="mb-2 block text-sm font-medium text-slate-700">Frequency</label>
                         <input

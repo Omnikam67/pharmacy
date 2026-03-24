@@ -10,6 +10,8 @@ from app.models.doctor import (
     AppointmentRequest,
     AppointmentActionRequest,
     AppointmentCompleteRequest,
+    ReferralCreateRequest,
+    ReferredAppointmentBookingRequest,
     DoctorResponse,
     AppointmentResponse,
     RevenueAnalyticsRequest,
@@ -147,7 +149,8 @@ async def create_appointment(request: AppointmentRequest):
         patient_gender=request.patient_gender,
         appointment_date=request.appointment_date,
         appointment_time=request.appointment_time,
-        notes=request.notes
+        notes=request.notes,
+        referral_id=request.referral_id,
     )
     
     return result
@@ -208,6 +211,64 @@ async def complete_appointment(request: AppointmentCompleteRequest):
         doctor_id=request.doctor_id,
         prescription_notes=request.prescription_notes,
         medicines=[medicine.model_dump() for medicine in request.medicines],
+    )
+    return result
+
+
+@router.post("/referrals/create")
+async def create_referral(request: ReferralCreateRequest):
+    result = DoctorService.create_referral(
+        source_appointment_id=request.source_appointment_id,
+        from_doctor_id=request.from_doctor_id,
+        to_doctor_id=request.to_doctor_id,
+        reason=request.reason,
+        clinical_notes=request.clinical_notes,
+    )
+    return result
+
+
+@router.get("/referrals/patient/{patient_phone}")
+async def get_patient_referrals(patient_phone: str):
+    referrals = DoctorService.get_referrals_for_patient(patient_phone)
+    return {"success": True, "referrals": referrals, "count": len(referrals)}
+
+
+@router.get("/referrals/source/{doctor_id}")
+async def get_source_doctor_referrals(doctor_id: str):
+    referrals = DoctorService.get_referrals_for_source_doctor(doctor_id)
+    return {"success": True, "referrals": referrals, "count": len(referrals)}
+
+
+@router.get("/referrals/target/{doctor_id}")
+async def get_target_doctor_referrals(doctor_id: str):
+    referrals = DoctorService.get_referrals_for_target_doctor(doctor_id)
+    return {"success": True, "referrals": referrals, "count": len(referrals)}
+
+
+@router.get("/referrals/{referral_id}")
+async def get_referral_detail(referral_id: str):
+    referral = DoctorService.get_referral_detail(referral_id)
+    if not referral:
+        raise HTTPException(status_code=404, detail="Referral not found")
+    return {"success": True, "referral": referral}
+
+
+@router.post("/referrals/book")
+async def book_referred_appointment(request: ReferredAppointmentBookingRequest):
+    referral = DoctorService.get_referral_detail(request.referral_id)
+    if not referral:
+        raise HTTPException(status_code=404, detail="Referral not found")
+
+    result = DoctorService.create_appointment_request(
+        doctor_id=referral["to_doctor_id"],
+        patient_name=request.patient_name,
+        patient_phone=request.patient_phone,
+        patient_age=request.patient_age,
+        patient_gender=request.patient_gender,
+        appointment_date=request.appointment_date,
+        appointment_time=request.appointment_time,
+        notes=request.notes,
+        referral_id=request.referral_id,
     )
     return result
 

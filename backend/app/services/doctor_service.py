@@ -4,7 +4,13 @@ import json
 import re
 
 from sqlalchemy.orm import Session
-from app.core.doctor_models import DoctorTable, DoctorRegistrationRequest, AppointmentRequestTable, RevenueTable
+from app.core.doctor_models import (
+    DoctorTable,
+    DoctorRegistrationRequest,
+    AppointmentRequestTable,
+    PatientReferralTable,
+    RevenueTable,
+)
 from app.core.database import SessionLocal
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Tuple
@@ -414,8 +420,78 @@ class DoctorService:
         return cleaned or fallback
 
     @staticmethod
-    def _appointment_to_dict(app: AppointmentRequestTable, doctor: Optional[DoctorTable] = None) -> Dict:
+    def _referral_to_dict(
+        referral: PatientReferralTable,
+        from_doctor: Optional[DoctorTable] = None,
+        to_doctor: Optional[DoctorTable] = None,
+        referred_appointment: Optional[AppointmentRequestTable] = None,
+    ) -> Dict:
+        linked_appointment = referred_appointment
+        linked_doctor = to_doctor
+        if linked_appointment and not linked_doctor:
+            linked_doctor = to_doctor
+
+        return {
+            "id": referral.id,
+            "source_appointment_id": referral.source_appointment_id,
+            "from_doctor_id": referral.from_doctor_id,
+            "from_doctor_name": from_doctor.name if from_doctor else None,
+            "to_doctor_id": referral.to_doctor_id,
+            "to_doctor_name": to_doctor.name if to_doctor else None,
+            "to_doctor_specialty": to_doctor.specialty if to_doctor else None,
+            "patient_name": referral.patient_name,
+            "patient_phone": referral.patient_phone,
+            "patient_age": referral.patient_age,
+            "patient_gender": referral.patient_gender,
+            "reason": referral.reason,
+            "clinical_notes": referral.clinical_notes,
+            "status": referral.status,
+            "referred_appointment_id": referral.referred_appointment_id,
+            "referred_appointment_status": linked_appointment.status if linked_appointment else None,
+            "has_result_prescription": bool(linked_appointment and linked_appointment.prescription_image),
+            "created_at": referral.created_at.isoformat() if referral.created_at else None,
+            "updated_at": referral.updated_at.isoformat() if referral.updated_at else None,
+        }
+
+    @staticmethod
+    def _appointment_to_dict(
+        app: AppointmentRequestTable,
+        doctor: Optional[DoctorTable] = None,
+        referral: Optional[PatientReferralTable] = None,
+        from_doctor: Optional[DoctorTable] = None,
+        to_doctor: Optional[DoctorTable] = None,
+    ) -> Dict:
         medicines = DoctorService._deserialize_medicines(app.prescription_text)
+        referred_appointment = None
+        if referral and referral.referred_appointment_id:
+            if referral.referred_appointment_id == app.id:
+                referred_appointment = app
+            else:
+                db = SessionLocal()
+                try:
+                    referred_appointment = db.query(AppointmentRequestTable).filter(
+                        AppointmentRequestTable.id == referral.referred_appointment_id
+                    ).first()
+                finally:
+                    db.close()
+
+        referral_payload = DoctorService._referral_to_dict(
+            referral,
+            from_doctor,
+            to_doctor,
+            referred_appointment,
+        ) if referral else None
+        if referral_payload and referred_appointment:
+            referral_payload["result_appointment"] = {
+                "id": referred_appointment.id,
+                "status": referred_appointment.status,
+                "appointment_date": referred_appointment.appointment_date,
+                "appointment_time": referred_appointment.appointment_time,
+                "has_prescription_image": bool(referred_appointment.prescription_image),
+                "prescription_medicines": DoctorService._deserialize_medicines(referred_appointment.prescription_text),
+                "prescription_notes": referred_appointment.prescription_notes,
+            }
+
         return {
             "id": app.id,
             "doctor_id": app.doctor_id,
@@ -430,11 +506,14 @@ class DoctorService:
             "appointment_date": app.appointment_date,
             "appointment_time": app.appointment_time,
             "notes": app.notes,
+            "referral_id": app.referral_id,
+            "is_referred": bool(app.referral_id),
             "status": app.status,
             "reason": app.reason,
             "prescription_medicines": medicines,
             "prescription_notes": app.prescription_notes,
             "has_prescription_image": bool(app.prescription_image),
+            "referral": referral_payload,
             "created_at": app.created_at.isoformat() if app.created_at else None,
             "updated_at": app.updated_at.isoformat() if app.updated_at else None,
             "completed_at": app.completed_at.isoformat() if app.completed_at else None,
@@ -710,7 +789,8 @@ class DoctorService:
         patient_gender: str,
         appointment_date: Optional[str] = None,
         appointment_time: Optional[str] = None,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        referral_id: Optional[str] = None,
     ) -> Dict:
         """Create an appointment request"""
         db = SessionLocal()
@@ -720,6 +800,16 @@ class DoctorService:
                 doctor = None
             if not doctor:
                 return {"success": False, "message": "Doctor not found"}
+
+            referral = None
+            if referral_id:
+                referral = db.query(PatientReferralTable).filter(PatientReferralTable.id == referral_id).first()
+                if not referral:
+                    return {"success": False, "message": "Referral not found"}
+                if referral.to_doctor_id != doctor.id:
+                    return {"success": False, "message": "Referral doctor does not match selected doctor"}
+                if referral.status not in {"pending_booking", "cancelled"}:
+                    return {"success": False, "message": "Referral is already booked or closed"}
             
             appointment = AppointmentRequestTable(
                 doctor_id=doctor.id,
@@ -730,16 +820,29 @@ class DoctorService:
                 appointment_date=appointment_date,
                 appointment_time=appointment_time,
                 notes=notes,
+                referral_id=referral.id if referral else None,
                 status="pending"
             )
             
             db.add(appointment)
+            db.flush()
+
+            if referral:
+                referral.patient_name = patient_name
+                referral.patient_phone = patient_phone
+                referral.patient_age = patient_age
+                referral.patient_gender = patient_gender
+                referral.referred_appointment_id = appointment.id
+                referral.status = "booked"
+                referral.updated_at = datetime.utcnow()
+
             db.commit()
             
             return {
                 "success": True,
                 "message": "Appointment request created",
-                "appointment_id": appointment.id
+                "appointment_id": appointment.id,
+                "referral_id": referral.id if referral else None,
             }
         except Exception as e:
             db.rollback()
@@ -759,7 +862,82 @@ class DoctorService:
                 AppointmentRequestTable.doctor_id == doctor.id,
                 AppointmentRequestTable.status == "pending"
             ).all()
-            return [DoctorService._appointment_to_dict(app, doctor) for app in appointments]
+            result = []
+            for app in appointments:
+                referral = db.query(PatientReferralTable).filter(PatientReferralTable.id == app.referral_id).first() if app.referral_id else None
+                from_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.from_doctor_id).first() if referral else None
+                to_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.to_doctor_id).first() if referral else None
+                result.append(DoctorService._appointment_to_dict(app, doctor, referral, from_doctor, to_doctor))
+            return result
+        finally:
+            db.close()
+
+    @staticmethod
+    def create_referral(
+        source_appointment_id: str,
+        from_doctor_id: str,
+        to_doctor_id: str,
+        reason: str,
+        clinical_notes: Optional[str] = None,
+    ) -> Dict:
+        """Create a referral linked to an existing appointment."""
+        db = SessionLocal()
+        try:
+            source_doctor = DoctorService._get_doctor_by_identifier(db, from_doctor_id)
+            target_doctor = DoctorService._get_doctor_by_identifier(db, to_doctor_id)
+            if not source_doctor:
+                return {"success": False, "message": "Referring doctor not found"}
+            if not target_doctor or target_doctor.status != "approved":
+                return {"success": False, "message": "Referred doctor not found or not approved"}
+            if source_doctor.id == target_doctor.id:
+                return {"success": False, "message": "Doctor cannot refer patient to self"}
+            if not (reason or "").strip():
+                return {"success": False, "message": "Referral reason is required"}
+
+            appointment = db.query(AppointmentRequestTable).filter(
+                AppointmentRequestTable.id == source_appointment_id,
+                AppointmentRequestTable.doctor_id == source_doctor.id,
+            ).first()
+            if not appointment:
+                return {"success": False, "message": "Source appointment not found"}
+            if appointment.status not in {"approved", "completed"}:
+                return {"success": False, "message": "Only approved or completed appointments can be referred"}
+            if appointment.referral_id:
+                existing = db.query(PatientReferralTable).filter(PatientReferralTable.id == appointment.referral_id).first()
+                if existing:
+                    return {
+                        "success": True,
+                        "message": "Referral already exists for this appointment",
+                        "referral": DoctorService._referral_to_dict(existing, source_doctor, target_doctor),
+                    }
+
+            referral = PatientReferralTable(
+                source_appointment_id=appointment.id,
+                from_doctor_id=source_doctor.id,
+                to_doctor_id=target_doctor.id,
+                patient_name=appointment.patient_name,
+                patient_phone=appointment.patient_phone,
+                patient_age=appointment.patient_age,
+                patient_gender=appointment.patient_gender,
+                reason=reason.strip(),
+                clinical_notes=(clinical_notes or "").strip() or None,
+                status="pending_booking",
+            )
+            db.add(referral)
+            db.flush()
+
+            appointment.referral_id = referral.id
+            appointment.updated_at = datetime.utcnow()
+            db.commit()
+
+            return {
+                "success": True,
+                "message": "Referral created successfully",
+                "referral": DoctorService._referral_to_dict(referral, source_doctor, target_doctor),
+            }
+        except Exception as e:
+            db.rollback()
+            return {"success": False, "message": str(e)}
         finally:
             db.close()
     
@@ -778,6 +956,11 @@ class DoctorService:
             appointment.status = "approved"
             appointment.updated_at = datetime.utcnow()
             appointment.whatsapp_sent = False
+            if appointment.referral_id:
+                referral = db.query(PatientReferralTable).filter(PatientReferralTable.id == appointment.referral_id).first()
+                if referral:
+                    referral.status = "approved"
+                    referral.updated_at = datetime.utcnow()
             db.commit()
 
             doctor = db.query(DoctorTable).filter(DoctorTable.id == appointment.doctor_id).first()
@@ -834,6 +1017,11 @@ class DoctorService:
             appointment.status = "cancelled"
             appointment.reason = reason
             appointment.updated_at = datetime.utcnow()
+            if appointment.referral_id:
+                referral = db.query(PatientReferralTable).filter(PatientReferralTable.id == appointment.referral_id).first()
+                if referral:
+                    referral.status = "cancelled"
+                    referral.updated_at = datetime.utcnow()
             db.commit()
 
             doctor = db.query(DoctorTable).filter(DoctorTable.id == appointment.doctor_id).first()
@@ -902,6 +1090,11 @@ class DoctorService:
             appointment.prescription_image = prescription_image
             appointment.completed_at = datetime.utcnow()
             appointment.updated_at = datetime.utcnow()
+            if appointment.referral_id:
+                referral = db.query(PatientReferralTable).filter(PatientReferralTable.id == appointment.referral_id).first()
+                if referral:
+                    referral.status = "completed"
+                    referral.updated_at = datetime.utcnow()
             db.commit()
 
             from app.services.whatsapp_service import WhatsAppService
@@ -934,10 +1127,22 @@ class DoctorService:
             if not doctor:
                 return []
             appointments = db.query(AppointmentRequestTable).filter(
-                AppointmentRequestTable.doctor_id == doctor.id,
-                AppointmentRequestTable.status == status
+                AppointmentRequestTable.doctor_id == doctor.id
             ).all()
-            return [DoctorService._appointment_to_dict(app, doctor) for app in appointments]
+            result = []
+            for app in appointments:
+                referral = db.query(PatientReferralTable).filter(PatientReferralTable.id == app.referral_id).first() if app.referral_id else None
+                from_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.from_doctor_id).first() if referral else None
+                to_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.to_doctor_id).first() if referral else None
+                effective_status = app.status
+                if referral and referral.from_doctor_id == doctor.id and referral.status == "completed":
+                    effective_status = "completed"
+                elif referral and referral.from_doctor_id == doctor.id and referral.status == "cancelled":
+                    effective_status = "cancelled"
+
+                if effective_status == status:
+                    result.append(DoctorService._appointment_to_dict(app, doctor, referral, from_doctor, to_doctor))
+            return result
         finally:
             db.close()
     
@@ -1095,16 +1300,28 @@ class DoctorService:
                 AppointmentRequestTable.doctor_id == doctor.id,
                 AppointmentRequestTable.status == "pending"
             ).count()
-            
-            completed_requests = db.query(AppointmentRequestTable).filter(
-                AppointmentRequestTable.doctor_id == doctor.id,
-                AppointmentRequestTable.status == "completed"
-            ).count()
 
-            cancelled_requests = db.query(AppointmentRequestTable).filter(
-                AppointmentRequestTable.doctor_id == doctor.id,
-                AppointmentRequestTable.status == "cancelled"
-            ).count()
+            all_doctor_appointments = db.query(AppointmentRequestTable).filter(
+                AppointmentRequestTable.doctor_id == doctor.id
+            ).all()
+            approved_requests = 0
+            completed_requests = 0
+            cancelled_requests = 0
+            for appointment in all_doctor_appointments:
+                effective_status = appointment.status
+                if appointment.referral_id:
+                    referral = db.query(PatientReferralTable).filter(
+                        PatientReferralTable.id == appointment.referral_id
+                    ).first()
+                    if referral and referral.from_doctor_id == doctor.id and referral.status in {"completed", "cancelled"}:
+                        effective_status = referral.status
+
+                if effective_status == "approved":
+                    approved_requests += 1
+                elif effective_status == "completed":
+                    completed_requests += 1
+                elif effective_status == "cancelled":
+                    cancelled_requests += 1
             
             return {
                 "today_appointments": today_appointments,
@@ -1112,7 +1329,7 @@ class DoctorService:
                 "total_appointments": total_appointments,
                 "total_revenue": total_revenue_amount,
                 "pending_requests": pending_requests,
-                "approved_requests": total_appointments,
+                "approved_requests": approved_requests,
                 "completed_requests": completed_requests,
                 "cancelled_requests": cancelled_requests,
                 "overall_filter": overall_filter
@@ -1160,8 +1377,124 @@ class DoctorService:
             result = []
             for app in appointments:
                 doctor = db.query(DoctorTable).filter(DoctorTable.id == app.doctor_id).first()
-                result.append(DoctorService._appointment_to_dict(app, doctor))
+                referral = db.query(PatientReferralTable).filter(PatientReferralTable.id == app.referral_id).first() if app.referral_id else None
+                from_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.from_doctor_id).first() if referral else None
+                to_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.to_doctor_id).first() if referral else None
+                result.append(DoctorService._appointment_to_dict(app, doctor, referral, from_doctor, to_doctor))
             return result
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_referrals_for_patient(patient_phone: str) -> List[Dict]:
+        db = SessionLocal()
+        try:
+            referrals = db.query(PatientReferralTable).filter(
+                PatientReferralTable.patient_phone == patient_phone
+            ).order_by(PatientReferralTable.created_at.desc()).all()
+            result = []
+            for referral in referrals:
+                from_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.from_doctor_id).first()
+                to_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.to_doctor_id).first()
+                referred_appointment = db.query(AppointmentRequestTable).filter(
+                    AppointmentRequestTable.id == referral.referred_appointment_id
+                ).first() if referral.referred_appointment_id else None
+                item = DoctorService._referral_to_dict(referral, from_doctor, to_doctor, referred_appointment)
+                if referred_appointment:
+                    item["result_appointment"] = DoctorService._appointment_to_dict(
+                        referred_appointment,
+                        to_doctor,
+                        referral,
+                        from_doctor,
+                        to_doctor,
+                    )
+                result.append(item)
+            return result
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_referrals_for_source_doctor(doctor_id: str) -> List[Dict]:
+        db = SessionLocal()
+        try:
+            doctor = DoctorService._get_doctor_by_identifier(db, doctor_id)
+            if not doctor:
+                return []
+            referrals = db.query(PatientReferralTable).filter(
+                PatientReferralTable.from_doctor_id == doctor.id
+            ).order_by(PatientReferralTable.created_at.desc()).all()
+            result = []
+            for referral in referrals:
+                to_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.to_doctor_id).first()
+                referred_appointment = db.query(AppointmentRequestTable).filter(
+                    AppointmentRequestTable.id == referral.referred_appointment_id
+                ).first() if referral.referred_appointment_id else None
+                item = DoctorService._referral_to_dict(referral, doctor, to_doctor, referred_appointment)
+                if referred_appointment:
+                    item["result_appointment"] = DoctorService._appointment_to_dict(
+                        referred_appointment,
+                        to_doctor,
+                        referral,
+                        doctor,
+                        to_doctor,
+                    )
+                result.append(item)
+            return result
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_referrals_for_target_doctor(doctor_id: str) -> List[Dict]:
+        db = SessionLocal()
+        try:
+            doctor = DoctorService._get_doctor_by_identifier(db, doctor_id)
+            if not doctor:
+                return []
+            referrals = db.query(PatientReferralTable).filter(
+                PatientReferralTable.to_doctor_id == doctor.id
+            ).order_by(PatientReferralTable.created_at.desc()).all()
+            result = []
+            for referral in referrals:
+                from_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.from_doctor_id).first()
+                referred_appointment = db.query(AppointmentRequestTable).filter(
+                    AppointmentRequestTable.id == referral.referred_appointment_id
+                ).first() if referral.referred_appointment_id else None
+                item = DoctorService._referral_to_dict(referral, from_doctor, doctor, referred_appointment)
+                if referred_appointment:
+                    item["result_appointment"] = DoctorService._appointment_to_dict(
+                        referred_appointment,
+                        doctor,
+                        referral,
+                        from_doctor,
+                        doctor,
+                    )
+                result.append(item)
+            return result
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_referral_detail(referral_id: str) -> Optional[Dict]:
+        db = SessionLocal()
+        try:
+            referral = db.query(PatientReferralTable).filter(PatientReferralTable.id == referral_id).first()
+            if not referral:
+                return None
+            from_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.from_doctor_id).first()
+            to_doctor = db.query(DoctorTable).filter(DoctorTable.id == referral.to_doctor_id).first()
+            referred_appointment = db.query(AppointmentRequestTable).filter(
+                AppointmentRequestTable.id == referral.referred_appointment_id
+            ).first() if referral.referred_appointment_id else None
+            item = DoctorService._referral_to_dict(referral, from_doctor, to_doctor, referred_appointment)
+            if referred_appointment:
+                item["result_appointment"] = DoctorService._appointment_to_dict(
+                    referred_appointment,
+                    to_doctor,
+                    referral,
+                    from_doctor,
+                    to_doctor,
+                )
+            return item
         finally:
             db.close()
 

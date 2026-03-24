@@ -74,6 +74,7 @@ class AppointmentRequest(BaseModel):
     appointment_date: Optional[str] = None  # Format: YYYY-MM-DD
     appointment_time: Optional[str] = None  # Format: HH:MM
     notes: Optional[str] = None
+    referral_id: Optional[str] = None
     
 
 class AppointmentResponse(BaseModel):
@@ -114,6 +115,25 @@ class AppointmentCompleteRequest(BaseModel):
     doctor_id: str
     prescription_notes: Optional[str] = None
     medicines: List[PrescriptionMedicineInput] = Field(default_factory=list)
+
+
+class ReferralCreateRequest(BaseModel):
+    source_appointment_id: str
+    from_doctor_id: str
+    to_doctor_id: str
+    reason: str
+    clinical_notes: Optional[str] = None
+
+
+class ReferredAppointmentBookingRequest(BaseModel):
+    referral_id: str
+    patient_name: str
+    patient_phone: str
+    patient_age: int
+    patient_gender: str
+    appointment_date: Optional[str] = None
+    appointment_time: Optional[str] = None
+    notes: Optional[str] = None
 
 
 # ===== REVENUE & ANALYTICS =====
